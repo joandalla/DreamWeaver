@@ -1,16 +1,17 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { DreamsProvider } from './context/DreamsContext';
-import { ThemeProvider } from './context/ThemeContext';
+import ToastProvider from './components/Toaster';
 import Header from './components/Header';
 import Footer from './components/Footer';
-import ToastProvider from './components/Toaster';
 import CommunityGallery from './pages/CommunityGallery';
 import DreamGallery from './pages/DreamGallery';
 import DreamDetail from './pages/DreamDetail';
 import DreamWeaver from './pages/DreamWeaver';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
+import About from './pages/About';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
               <main className="grow container mx-auto px-4 py-6">
                 <Routes>
                   <Route path="/" element={<CommunityGallery />} />
+                  <Route path="/about" element={<About />} />
                   <Route
                     path="/my-dreams"
                     element={

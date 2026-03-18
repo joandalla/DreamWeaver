@@ -1,56 +1,65 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../hooks/useTheme'; // <-- neuer Import
 import Button from './Button';
 
 export default function Header() {
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const location = useLocation();
 
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-  const closeMenu = () => setIsMenuOpen(false);
+  const isActive = (path) => location.pathname === path;
+
+  const navLinks = [
+    { to: '/', label: 'Community' },
+    ...(user ? [{ to: '/my-dreams', label: 'Meine Träume' }] : []),
+    { to: '/about', label: 'Über' },
+  ];
 
   return (
-    <header className="bg-indigo-800 text-white p-4 shadow-md relative">
-      <nav className="container mx-auto flex justify-between items-center">
-        <Link to="/" className="text-2xl font-bold tracking-tight" onClick={closeMenu}>
+    <header className="bg-indigo-800 text-white shadow-md sticky top-0 z-50">
+      <nav className="container mx-auto px-4 py-3 flex items-center justify-between">
+        {/* Logo */}
+        <Link to="/" className="text-2xl font-bold tracking-tight hover:text-indigo-200 transition">
           DreamWeaver
         </Link>
 
-        {/* Dark Mode Toggle (Desktop & mobil) */}
-        <button
-          onClick={toggleDarkMode}
-          className="p-2 rounded-full hover:bg-indigo-700 transition"
-          aria-label="Dark Mode umschalten"
-        >
-          {darkMode ? '☀️' : '🌙'}
-        </button>
-
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center gap-6">
-          <Link to="/" className="hover:text-indigo-200 transition">
-            Community
-          </Link>
+        <div className="hidden md:flex items-center space-x-6">
+          {navLinks.map(link => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={`hover:text-indigo-200 transition ${
+                isActive(link.to) ? 'border-b-2 border-white' : ''
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
+
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 rounded-full hover:bg-indigo-700 transition"
+            aria-label="Dark Mode umschalten"
+          >
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+
+          {/* Auth Buttons */}
           {user ? (
-            <>
-              <Link to="/my-dreams" className="hover:text-indigo-200 transition">
-                Meine Träume
-              </Link>
-              <Link to="/weave" className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg transition">
-                + Neuer Traum
-              </Link>
-              <Button
-                variant="secondary"
-                onClick={logout}
-                className="bg-transparent! text-white! border border-white hover:bg-white hover:text-indigo-800!"
-              >
-                Logout
-              </Button>
-            </>
+            <Button
+              variant="secondary"
+              onClick={logout}
+              className="bg-transparent! text-white! border border-white hover:bg-white hover:text-indigo-800!"
+            >
+              Logout
+            </Button>
           ) : (
-            <div className="flex items-center gap-4">
+            <div className="flex items-center space-x-3">
               <Link to="/login" className="hover:text-indigo-200 transition">
                 Login
               </Link>
@@ -64,10 +73,10 @@ export default function Header() {
           )}
         </div>
 
-        {/* Hamburger Button */}
+        {/* Mobile Menu Button */}
         <button
           className="md:hidden text-white focus:outline-none"
-          onClick={toggleMenu}
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
           aria-label="Menü"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -79,36 +88,52 @@ export default function Header() {
           </svg>
         </button>
 
-        {/* Mobiles Menü */}
+        {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="absolute top-full left-0 right-0 bg-indigo-700 p-4 flex flex-col gap-3 md:hidden shadow-lg z-50">
-            <Link to="/" className="block py-2 px-4 hover:bg-indigo-600 rounded" onClick={closeMenu}>
-              Community
-            </Link>
+          <div className="absolute top-full left-0 right-0 bg-indigo-700 p-4 flex flex-col gap-3 md:hidden shadow-lg">
+            {navLinks.map(link => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className="block py-2 px-4 hover:bg-indigo-600 rounded"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+            <button
+              onClick={() => {
+                toggleDarkMode();
+                setIsMenuOpen(false);
+              }}
+              className="block w-full text-left py-2 px-4 hover:bg-indigo-600 rounded"
+            >
+              {darkMode ? '☀️ Heller Modus' : '🌙 Dunkler Modus'}
+            </button>
             {user ? (
-              <>
-                <Link to="/my-dreams" className="block py-2 px-4 hover:bg-indigo-600 rounded" onClick={closeMenu}>
-                  Meine Träume
-                </Link>
-                <Link to="/weave" className="block py-2 px-4 bg-indigo-500 hover:bg-indigo-600 rounded" onClick={closeMenu}>
-                  + Neuer Traum
-                </Link>
-                <button
-                  onClick={() => {
-                    logout();
-                    closeMenu();
-                  }}
-                  className="block w-full text-left py-2 px-4 border border-white rounded hover:bg-indigo-600"
-                >
-                  Logout
-                </button>
-              </>
+              <button
+                onClick={() => {
+                  logout();
+                  setIsMenuOpen(false);
+                }}
+                className="block w-full text-left py-2 px-4 border border-white rounded hover:bg-indigo-600"
+              >
+                Logout
+              </button>
             ) : (
               <>
-                <Link to="/login" className="block py-2 px-4 hover:bg-indigo-600 rounded" onClick={closeMenu}>
+                <Link
+                  to="/login"
+                  className="block py-2 px-4 hover:bg-indigo-600 rounded"
+                  onClick={() => setIsMenuOpen(false)}
+                >
                   Login
                 </Link>
-                <Link to="/signup" className="block py-2 px-4 bg-indigo-500 hover:bg-indigo-600 rounded" onClick={closeMenu}>
+                <Link
+                  to="/signup"
+                  className="block py-2 px-4 bg-indigo-500 hover:bg-indigo-600 rounded"
+                  onClick={() => setIsMenuOpen(false)}
+                >
                   Registrieren
                 </Link>
               </>
