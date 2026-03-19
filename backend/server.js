@@ -1,18 +1,19 @@
-// backend/server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sharp = require('sharp');
+const NodeCache = require('node-cache');
 require('dotenv').config();
 
 const app = express();
+const cache = new NodeCache({ stdTTL: 30 }); // Cache für 30 Sekunden
 
-// CORS – erlaubt sowohl lokale Entwicklung als auch Produktions-Frontend
+// CORS – erlaubt lokale Entwicklung und Produktions-Frontend
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://dream-weaver-omega.vercel.app' // deine Vercel-Frontend-URL
+  'https://dreamweaver-omega.vercel.app'
 ];
 
 app.use(cors({
@@ -29,14 +30,14 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// ========== HILFSFUNKTION: THUMBNAIL ==========
+// ========== HILFSFUNKTION: THUMBNAIL (Qualität auf 60% reduziert) ==========
 const generateThumbnail = async (base64Image) => {
   try {
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
     const thumbnailBuffer = await sharp(buffer)
       .resize(200, 200, { fit: 'cover', position: 'center' })
-      .jpeg({ quality: 80 })
+      .jpeg({ quality: 60 }) // von 80 auf 60 gesenkt
       .toBuffer();
     return `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
   } catch (err) {
@@ -224,15 +225,26 @@ app.get('/api/community/dreams', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
-    const skip = (page - 1) * limit;
     const search = req.query.search || '';
+    const cacheKey = `community_${page}_${limit}_${search}`;
 
+    // Prüfen, ob Daten im Cache sind
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
+    const skip = (page - 1) * limit;
     const filter = search ? { title: { $regex: search, $options: 'i' } } : {};
+
     const dreams = await Dream.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select('title colors imageData imageDataThumb likeCount commentCount userId createdAt');
+      .select('title colors imageDataThumb likeCount commentCount userId createdAt');
+
+    // In Cache speichern
+    cache.set(cacheKey, dreams);
     res.json(dreams);
   } catch (err) {
     console.error(err);
