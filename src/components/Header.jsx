@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../hooks/useTheme'; // <-- neuer Import
+import { useTheme } from '../hooks/useTheme';
 import Button from './Button';
 
 export default function Header() {
@@ -13,20 +13,21 @@ export default function Header() {
   const isActive = (path) => location.pathname === path;
 
   const navLinks = [
-    { to: '/', label: 'Community' },
-    ...(user ? [{ to: '/my-dreams', label: 'Meine Träume' }] : []),
     { to: '/about', label: 'Über' },
+    { to: '/', label: 'Community' },
+    ...(user ? [{ to: `/profile/${user._id}`, label: 'Profil' }] : []),
+    ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin' }] : []),
   ];
 
   return (
     <header className="bg-indigo-800 text-white shadow-md sticky top-0 z-50">
       <nav className="container mx-auto px-4 py-3 flex items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="text-2xl font-bold tracking-tight hover:text-indigo-200 transition">
+        <Link to="/" className="text-2xl font-bold tracking-tight hover:text-indigo-200 transition whitespace-nowrap">
           DreamWeaver
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation (zentriert) */}
         <div className="hidden md:flex items-center space-x-6">
           {navLinks.map(link => (
             <Link
@@ -39,8 +40,19 @@ export default function Header() {
               {link.label}
             </Link>
           ))}
+        </div>
 
-          {/* Dark Mode Toggle */}
+        {/* Desktop Rechte Gruppe */}
+        <div className="hidden md:flex items-center space-x-4">
+          {user && (
+            <Link
+              to="/weave"
+              className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg transition font-medium"
+            >
+              + Neuer Traum
+            </Link>
+          )}
+
           <button
             onClick={toggleDarkMode}
             className="p-2 rounded-full hover:bg-indigo-700 transition"
@@ -49,15 +61,13 @@ export default function Header() {
             {darkMode ? '☀️' : '🌙'}
           </button>
 
-          {/* Auth Buttons */}
           {user ? (
-            <Button
-              variant="secondary"
+            <button
               onClick={logout}
-              className="bg-transparent! text-white! border border-white hover:bg-white hover:text-indigo-800!"
+              className="border border-white text-white px-4 py-2 rounded-lg hover:bg-white hover:text-indigo-800 transition font-medium"
             >
               Logout
-            </Button>
+            </button>
           ) : (
             <div className="flex items-center space-x-3">
               <Link to="/login" className="hover:text-indigo-200 transition">
@@ -65,7 +75,7 @@ export default function Header() {
               </Link>
               <Link
                 to="/signup"
-                className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg transition"
+                className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg transition font-medium"
               >
                 Registrieren
               </Link>
@@ -91,16 +101,47 @@ export default function Header() {
         {/* Mobile Menu */}
         {isMenuOpen && (
           <div className="absolute top-full left-0 right-0 bg-indigo-700 p-4 flex flex-col gap-3 md:hidden shadow-lg">
-            {navLinks.map(link => (
+            <Link
+              to="/about"
+              className="block py-2 px-4 hover:bg-indigo-600 rounded"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Über
+            </Link>
+            <Link
+              to="/"
+              className="block py-2 px-4 hover:bg-indigo-600 rounded"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Community
+            </Link>
+            {user && (
+              <>
+                <Link
+                  to={`/profile/${user._id}`}
+                  className="block py-2 px-4 hover:bg-indigo-600 rounded"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Profil
+                </Link>
+                <Link
+                  to="/weave"
+                  className="block py-2 px-4 bg-indigo-500 hover:bg-indigo-600 rounded font-medium"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  + Neuer Traum
+                </Link>
+              </>
+            )}
+            {user?.role === 'admin' && (
               <Link
-                key={link.to}
-                to={link.to}
+                to="/admin"
                 className="block py-2 px-4 hover:bg-indigo-600 rounded"
                 onClick={() => setIsMenuOpen(false)}
               >
-                {link.label}
+                Admin
               </Link>
-            ))}
+            )}
             <button
               onClick={() => {
                 toggleDarkMode();
@@ -116,7 +157,7 @@ export default function Header() {
                   logout();
                   setIsMenuOpen(false);
                 }}
-                className="block w-full text-left py-2 px-4 border border-white rounded hover:bg-indigo-600"
+                className="block w-full text-left py-2 px-4 border border-white rounded hover:bg-white hover:text-indigo-800 transition font-medium"
               >
                 Logout
               </button>

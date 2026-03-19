@@ -23,7 +23,9 @@ export function DreamsProvider({ children }) {
         const res = await axios.get(`${API_URL}/dreams`);
         setDreams(res.data);
       } catch (err) {
-        toast.error('Fehler beim Laden deiner Träume');
+        if (err.code !== 'ERR_NETWORK') {
+          toast.error('Fehler beim Laden deiner Träume');
+        }
         console.error(err);
       } finally {
         setLoading(false);
@@ -71,4 +73,8 @@ export function DreamsProvider({ children }) {
   );
 }
 
-export const useDreams = () => useContext(DreamsContext);
+export const useDreams = () => {
+  const context = useContext(DreamsContext);
+  if (!context) throw new Error('useDreams must be used within DreamsProvider');
+  return context;
+};

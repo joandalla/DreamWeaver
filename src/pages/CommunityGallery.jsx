@@ -14,45 +14,78 @@ export default function CommunityGallery() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const loaderRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
-  // Initialer Load
+  // Debounce: Suche wird erst 500ms nach dem letzten Tastendruck ausgeführt
   useEffect(() => {
-    fetchDreams(1, true);
-  }, []);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-  const fetchDreams = async (pageNum, reset = false) => {
+  // Gemeinsame Funktion zum Laden der Daten
+  const fetchDreams = useCallback(async (pageNum, reset = false) => {
+    // Vorherigen Request abbrechen
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      if (reset) setLoading(true);
-      else setLoadingMore(true);
+      if (reset) {
+        setLoading(true);
+        setDreams([]); // Nur hier leeren, wenn reset
+      } else {
+        setLoadingMore(true);
+      }
 
-      const res = await axios.get(`${API_URL}/community/dreams?page=${pageNum}&limit=${PAGE_SIZE}`);
+      const params = new URLSearchParams({
+        page: pageNum,
+        limit: PAGE_SIZE,
+      });
+      if (debouncedSearch) params.append('search', debouncedSearch);
+
+      const res = await axios.get(`${API_URL}/community/dreams?${params}`, {
+        signal: controller.signal,
+      });
       const newDreams = res.data;
 
       if (reset) {
         setDreams(newDreams);
+        setPage(1); // sicherstellen
       } else {
         setDreams(prev => [...prev, ...newDreams]);
+        setPage(pageNum);
       }
 
       setHasMore(newDreams.length === PAGE_SIZE);
-      if (!reset) setPage(pageNum);
     } catch (err) {
+      if (axios.isCancel(err)) return; // Ignoriere abgebrochene Requests
       toast.error('Fehler beim Laden der Community-Bilder');
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      abortControllerRef.current = null;
     }
-  };
+  }, [debouncedSearch]);
+
+  // Bei Änderung des Suchbegriffs neu laden (reset)
+  useEffect(() => {
+    fetchDreams(1, true);
+  }, [fetchDreams]);
 
   // Intersection Observer für unendliches Scrollen
   useEffect(() => {
-    if (!loaderRef.current || !hasMore || loadingMore) return;
+    if (!loaderRef.current || !hasMore || loadingMore || loading) return;
 
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          setPage(prev => prev + 1);
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
           fetchDreams(page + 1, false);
         }
       },
@@ -61,9 +94,7 @@ export default function CommunityGallery() {
 
     observer.observe(loaderRef.current);
     return () => observer.disconnect();
-  }, [hasMore, loadingMore, page]);
-
-  if (loading) return <Spinner />;
+  }, [hasMore, loadingMore, loading, page, fetchDreams]);
 
   return (
     <div className="space-y-8">
@@ -76,18 +107,36 @@ export default function CommunityGallery() {
           Teile deine Träume mit der Community und entdecke die Werke anderer.
         </p>
         <div className="mt-8">
-          <Button variant="primary" size="large" onClick={() => window.location.href = '/weave'}>
+          <Button variant="primary" onClick={() => window.location.href = '/weave'}>
             Jetzt eigenen Traum weben
           </Button>
         </div>
       </section>
 
+      {/* Suchleiste */}
+      <div className="max-w-xl mx-auto">
+        <input
+          type="text"
+          placeholder="Nach Titeln suchen..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg p-3"
+        />
+      </div>
+
       {/* Galerie */}
       <section>
-        <h2 className="text-2xl font-semibold mb-6 dark:text-white">Community-Galerie</h2>
-        {dreams.length === 0 ? (
+        <h2 className="text-2xl font-semibold mb-6 dark:text-white">
+          {debouncedSearch ? `Ergebnisse für "${debouncedSearch}"` : 'Community-Galerie'}
+        </h2>
+
+        {loading && dreams.length === 0 ? (
+          <Spinner />
+        ) : dreams.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-center py-12">
-            Noch keine Bilder in der Community. Sei der Erste! 🎨
+            {debouncedSearch 
+              ? 'Keine Bilder gefunden. Versuche einen anderen Suchbegriff.' 
+              : 'Noch keine Bilder in der Community. Sei der Erste! 🎨'}
           </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -98,7 +147,7 @@ export default function CommunityGallery() {
         )}
 
         {/* Lade-Indikator für mehr Bilder */}
-        {hasMore && (
+        {hasMore && dreams.length > 0 && (
           <div ref={loaderRef} className="py-8 text-center">
             {loadingMore ? <Spinner /> : <span className="text-gray-400">Scrolle für mehr</span>}
           </div>

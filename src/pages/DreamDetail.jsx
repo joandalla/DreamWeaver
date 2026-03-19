@@ -1,17 +1,48 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import { useDreams } from '../context/DreamsContext';
 import { useDreamWeaver } from '../hooks/useDreamWeaver';
+import { useAuth } from '../context/AuthContext';
 import Button from '../components/Button';
-import { useEffect, useRef } from 'react';
+import CommentSection from '../components/CommentSection';
+import Spinner from '../components/Spinner';
 import toast from 'react-hot-toast';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function DreamDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { dreams, updateDream, deleteDream } = useDreams();
-  const dream = dreams.find(d => d._id === id);
-  const canvasRef = useRef(null);
   const { generateFromRules } = useDreamWeaver();
+  const [dream, setDream] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const loadDream = async () => {
+      setLoading(true);
+      // Zuerst im eigenen Context suchen
+      const ownDream = dreams.find(d => d._id === id);
+      if (ownDream) {
+        setDream(ownDream);
+        setLoading(false);
+        return;
+      }
+      // Öffentlich laden
+      try {
+        const res = await axios.get(`${API_URL}/dreams/public/${id}`);
+        setDream(res.data);
+      } catch (err) {
+        toast.error('Traum nicht gefunden');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDream();
+  }, [id, dreams]);
 
   useEffect(() => {
     if (dream && canvasRef.current) {
@@ -19,72 +50,65 @@ export default function DreamDetail() {
       canvasRef.current.width = 600;
       canvasRef.current.height = 400;
       const img = new Image();
-      img.src = dream.imageData;
+      img.src = dream.imageData || dream.imageDataThumb;
       img.onload = () => ctx.drawImage(img, 0, 0, 600, 400);
     }
   }, [dream]);
 
-  const handleRegenerate = () => {
+  const handleRegenerate = async () => {
     if (!dream?.rules) return;
     const newImageData = generateFromRules(dream.rules, 600, 400);
-    const updatedDream = { ...dream, imageData: newImageData };
-    updateDream(dream._id, updatedDream);
-    toast.success('Bild neu generiert');
+    const updatedDream = { ...dream, imageData: newImageData, imageDataThumb: newImageData };
+    if (user && dream.userId === user._id) {
+      await updateDream(dream._id, updatedDream);
+      setDream(updatedDream);
+      toast.success('Bild neu generiert');
+    } else {
+      toast.error('Nur der Besitzer kann das Bild bearbeiten');
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    if (!user || dream.userId !== user._id) {
+      toast.error('Nicht berechtigt');
+      return;
+    }
     if (window.confirm('Wirklich löschen?')) {
-      deleteDream(dream._id);
+      await deleteDream(dream._id);
       toast.success('Traum gelöscht');
       navigate('/my-dreams');
     }
   };
 
-  if (!dream) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-gray-500 dark:text-gray-400">Traum nicht gefunden</p>
-        <Button variant="primary" onClick={() => navigate('/my-dreams')} className="mt-4">
-          Zurück zu meinen Träumen
-        </Button>
-      </div>
-    );
-  }
-
-  // Dynamische Anzeige der Regeln (kompatibel mit alten und neuen Strukturen)
-  const renderRules = () => {
-    const rules = dream.rules || {};
-    const entries = [];
-
-    // Neue Struktur (mit density, chaos, etc.)
-    if (rules.density !== undefined) {
-      entries.push({ label: 'Dichte', value: rules.density });
-      entries.push({ label: 'Chaos', value: rules.chaos });
-      entries.push({ label: 'Linienstärke', value: rules.thickness });
-      entries.push({ label: 'Gravitation', value: rules.gravity?.toFixed(2) });
-      entries.push({ label: 'Klecksigkeit', value: rules.blobiness });
-    } 
-    // Alte Struktur (mit shapeCount, minSize, maxSize)
-    else if (rules.shapeCount !== undefined) {
-      entries.push({ label: 'Formen', value: rules.shapeCount });
-      entries.push({ label: 'Farben', value: rules.colors?.join(', ') });
-      entries.push({ label: 'Größen', value: `${rules.minSize}–${rules.maxSize}px` });
-    } 
-    // Falls nichts passt, zeige Rohdaten
-    else {
-      return <pre className="text-xs bg-gray-100 p-2 rounded">{JSON.stringify(rules, null, 2)}</pre>;
+  const handleEdit = () => {
+    if (user && dream.userId === user._id) {
+      navigate(`/weave/${dream._id}`);
+    } else {
+      toast.error('Nicht berechtigt');
     }
-
-    return (
-      <ul className="list-disc list-inside text-gray-700 dark:text-gray-300">
-        {entries.map((entry, idx) => (
-          <li key={idx}>
-            <span className="font-medium">{entry.label}:</span> {entry.value}
-          </li>
-        ))}
-      </ul>
-    );
   };
+
+  // NEU: Link kopieren Funktion
+  const handleCopyLink = () => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success('Link in die Zwischenablage kopiert');
+    }).catch(() => {
+      toast.error('Fehler beim Kopieren');
+    });
+  };
+
+  if (loading) return <Spinner />;
+  if (!dream) return (
+    <div className="text-center py-20">
+      <p className="text-gray-500 dark:text-gray-400">Traum nicht gefunden</p>
+      <Button variant="primary" onClick={() => navigate('/')} className="mt-4">
+        Zurück zur Community
+      </Button>
+    </div>
+  );
+
+  const isOwner = user && dream.userId === user._id;
 
   return (
     <div>
@@ -104,19 +128,30 @@ export default function DreamDetail() {
         <h2 className="text-2xl font-semibold mb-2 dark:text-white">{dream.title}</h2>
         <div className="mb-4">
           <h3 className="font-medium mb-1 dark:text-gray-200">Regeln:</h3>
-          {renderRules()}
+          <pre className="text-xs bg-gray-100 dark:bg-gray-900 p-2 rounded overflow-auto">
+            {JSON.stringify(dream.params || dream.rules, null, 2)}
+          </pre>
         </div>
-        <div className="flex gap-2">
-          <Button variant="primary" onClick={handleRegenerate}>
-            Neu weben
-          </Button>
-          <Button variant="secondary" onClick={() => navigate(`/weave/${dream._id}`)}>
-            Bearbeiten
-          </Button>
-          <Button variant="danger" onClick={handleDelete}>
-            Löschen
+        <div className="flex flex-wrap gap-2 mb-4">
+          {isOwner && (
+            <>
+              <Button variant="primary" onClick={handleRegenerate}>
+                Neu weben
+              </Button>
+              <Button variant="secondary" onClick={handleEdit}>
+                Bearbeiten
+              </Button>
+              <Button variant="danger" onClick={handleDelete}>
+                Löschen
+              </Button>
+            </>
+          )}
+          {/* NEU: Teilen-Button für alle sichtbar */}
+          <Button variant="secondary" onClick={handleCopyLink}>
+            🔗 Link kopieren
           </Button>
         </div>
+        <CommentSection dreamId={dream._id} />
       </div>
     </div>
   );
