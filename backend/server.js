@@ -1,3 +1,4 @@
+// backend/server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -8,8 +9,20 @@ require('dotenv').config();
 
 const app = express();
 
+// CORS – erlaubt sowohl lokale Entwicklung als auch Produktions-Frontend
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://dreamweaver-omega.vercel.app' // deine Vercel-Frontend-URL
+];
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Nicht erlaubt von CORS'));
+    }
+  },
   credentials: true,
 }));
 
@@ -36,7 +49,7 @@ const generateThumbnail = async (base64Image) => {
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'admin'], default: 'user' }, // NEU
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
 });
 
 const dreamSchema = new mongoose.Schema({
@@ -68,10 +81,23 @@ const commentSchema = new mongoose.Schema({
 });
 commentSchema.index({ dreamId: 1, createdAt: -1 });
 
+const notificationSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  type: { type: String, enum: ['like', 'comment'], required: true },
+  dreamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Dream', required: true },
+  actorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  actorEmail: { type: String, required: true },
+  dreamTitle: { type: String },
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now },
+});
+notificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
+
 const User = mongoose.model('User', userSchema);
 const Dream = mongoose.model('Dream', dreamSchema);
 const Like = mongoose.model('Like', likeSchema);
 const Comment = mongoose.model('Comment', commentSchema);
+const Notification = mongoose.model('Notification', notificationSchema);
 
 // ========== AUTH MIDDLEWARE ==========
 const authenticate = async (req, res, next) => {
@@ -81,14 +107,15 @@ const authenticate = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = decoded.userId;
-    req.userRole = decoded.role; // NEU
+    req.userRole = decoded.role;
+    const user = await User.findById(decoded.userId).select('email');
+    if (user) req.userEmail = user.email;
     next();
   } catch (err) {
     res.status(401).json({ error: 'Token ungültig' });
   }
 };
 
-// NEU: Admin-Middleware
 const isAdmin = async (req, res, next) => {
   try {
     const user = await User.findById(req.userId);
@@ -101,17 +128,14 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
-// ========== AUTH ROUTES (mit Rolle im Token) ==========
+// ========== AUTH ROUTES ==========
 app.post('/api/register', async (req, res) => {
   try {
     const { email, password } = req.body;
     const hashed = await bcrypt.hash(password, 10);
     const user = new User({ email, password: hashed, role: 'user' });
     await user.save();
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET
-    );
+    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET);
     res.json({ token, userId: user._id, role: user.role });
   } catch (err) {
     res.status(400).json({ error: 'Email existiert bereits' });
@@ -127,10 +151,7 @@ app.post('/api/login', async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ error: 'Falsche Anmeldedaten' });
 
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET
-    );
+    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET);
     res.json({ token, userId: user._id, role: user.role });
   } catch (err) {
     res.status(500).json({ error: 'Serverfehler' });
@@ -191,6 +212,7 @@ app.delete('/api/dreams/:id', authenticate, async (req, res) => {
     await Dream.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     await Like.deleteMany({ dreamId: req.params.id });
     await Comment.deleteMany({ dreamId: req.params.id });
+    await Notification.deleteMany({ dreamId: req.params.id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Fehler beim Löschen' });
@@ -205,10 +227,7 @@ app.get('/api/community/dreams', async (req, res) => {
     const skip = (page - 1) * limit;
     const search = req.query.search || '';
 
-    const filter = search
-      ? { title: { $regex: search, $options: 'i' } }
-      : {};
-
+    const filter = search ? { title: { $regex: search, $options: 'i' } } : {};
     const dreams = await Dream.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -237,7 +256,7 @@ app.post('/api/likes/toggle', authenticate, async (req, res) => {
   try {
     const { dreamId } = req.body;
     const userId = req.userId;
-    const dream = await Dream.findById(dreamId);
+    const dream = await Dream.findById(dreamId).populate('userId', 'email');
     if (!dream) return res.status(404).json({ error: 'Traum nicht gefunden' });
 
     const existing = await Like.findOne({ dreamId, userId });
@@ -245,11 +264,24 @@ app.post('/api/likes/toggle', authenticate, async (req, res) => {
     if (existing) {
       await existing.deleteOne();
       await Dream.findByIdAndUpdate(dreamId, { $inc: { likeCount: -1 } });
+      await Notification.deleteOne({ dreamId, actorId: userId, type: 'like' });
       res.json({ liked: false });
     } else {
       const like = new Like({ dreamId, userId });
       await like.save();
       await Dream.findByIdAndUpdate(dreamId, { $inc: { likeCount: 1 } });
+
+      if (dream.userId._id.toString() !== userId) {
+        const notification = new Notification({
+          userId: dream.userId._id,
+          type: 'like',
+          dreamId,
+          actorId: userId,
+          actorEmail: req.userEmail || 'Ein Nutzer',
+          dreamTitle: dream.title,
+        });
+        await notification.save();
+      }
       res.json({ liked: true });
     }
   } catch (err) {
@@ -285,7 +317,7 @@ app.post('/api/comments', authenticate, async (req, res) => {
     const { dreamId, text } = req.body;
     if (!text?.trim()) return res.status(400).json({ error: 'Kommentar darf nicht leer sein' });
 
-    const dream = await Dream.findById(dreamId);
+    const dream = await Dream.findById(dreamId).populate('userId', 'email');
     if (!dream) return res.status(404).json({ error: 'Traum nicht gefunden' });
 
     const comment = new Comment({
@@ -296,6 +328,19 @@ app.post('/api/comments', authenticate, async (req, res) => {
     await comment.save();
     await comment.populate('userId', 'email');
     await Dream.findByIdAndUpdate(dreamId, { $inc: { commentCount: 1 } });
+
+    if (dream.userId._id.toString() !== req.userId) {
+      const notification = new Notification({
+        userId: dream.userId._id,
+        type: 'comment',
+        dreamId,
+        actorId: req.userId,
+        actorEmail: req.userEmail || 'Ein Nutzer',
+        dreamTitle: dream.title,
+      });
+      await notification.save();
+    }
+
     res.json(comment);
   } catch (err) {
     res.status(500).json({ error: 'Fehler beim Speichern' });
@@ -328,13 +373,45 @@ app.delete('/api/comments/:id', authenticate, async (req, res) => {
   }
 });
 
-// ========== PROFIL ROUTEN (erweitert mit täglichen Stats) ==========
+// ========== NOTIFICATION ROUTES ==========
+app.get('/api/notifications', authenticate, async (req, res) => {
+  try {
+    const notifications = await Notification.find({ userId: req.userId })
+      .sort({ createdAt: -1 })
+      .limit(20);
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ error: 'Fehler beim Laden' });
+  }
+});
+
+app.post('/api/notifications/read/:id', authenticate, async (req, res) => {
+  try {
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      { read: true },
+      { new: true }
+    );
+    res.json(notification);
+  } catch (err) {
+    res.status(500).json({ error: 'Fehler' });
+  }
+});
+
+app.post('/api/notifications/read-all', authenticate, async (req, res) => {
+  try {
+    await Notification.updateMany({ userId: req.userId, read: false }, { read: true });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Fehler' });
+  }
+});
+
+// ========== PROFIL ROUTES ==========
 app.get('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    if (!userId || userId === 'undefined') {
-      return res.status(400).json({ error: 'Ungültige User-ID' });
-    }
+    if (!userId || userId === 'undefined') return res.status(400).json({ error: 'Ungültige User-ID' });
 
     const user = await User.findById(userId).select('email role');
     if (!user) return res.status(404).json({ error: 'User nicht gefunden' });
@@ -353,16 +430,8 @@ app.get('/api/profile/:userId', async (req, res) => {
       date.setHours(0, 0, 0, 0);
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
-
-      const count = await Dream.countDocuments({
-        userId,
-        createdAt: { $gte: date, $lt: nextDate },
-      });
-
-      dailyStats.push({
-        date: date.toISOString().split('T')[0],
-        count,
-      });
+      const count = await Dream.countDocuments({ userId, createdAt: { $gte: date, $lt: nextDate } });
+      dailyStats.push({ date: date.toISOString().split('T')[0], count });
     }
 
     const dreamIds = dreams.map(d => d._id);
@@ -375,12 +444,7 @@ app.get('/api/profile/:userId', async (req, res) => {
     res.json({
       user: { email: user.email, _id: user._id, role: user.role },
       dreams,
-      stats: {
-        dreamsCount: dreams.length,
-        likesReceived,
-        commentsCount,
-        daily: dailyStats,
-      },
+      stats: { dreamsCount: dreams.length, likesReceived, commentsCount, daily: dailyStats },
     });
   } catch (err) {
     console.error(err);
@@ -394,7 +458,7 @@ app.get('/api/profile/:userId/likes', authenticate, async (req, res) => {
     if (userId !== req.userId) return res.status(403).json({ error: 'Nicht berechtigt' });
 
     const likes = await Like.find({ userId })
-      .populate('dreamId', 'title imageDataThumb imageData likeCount commentCount createdAt')
+      .populate('dreamId', 'title imageDataThumb likeCount commentCount createdAt')
       .sort({ createdAt: -1 });
     res.json(likes);
   } catch (err) {
@@ -408,7 +472,7 @@ app.get('/api/profile/:userId/comments', authenticate, async (req, res) => {
     if (userId !== req.userId) return res.status(403).json({ error: 'Nicht berechtigt' });
 
     const comments = await Comment.find({ userId })
-      .populate('dreamId', 'title imageDataThumb imageData')
+      .populate('dreamId', 'title imageDataThumb')
       .sort({ createdAt: -1 });
     res.json(comments);
   } catch (err) {
@@ -433,11 +497,10 @@ app.delete('/api/admin/dreams/:id', authenticate, isAdmin, async (req, res) => {
   try {
     const dream = await Dream.findById(req.params.id);
     if (!dream) return res.status(404).json({ error: 'Traum nicht gefunden' });
-
     await dream.deleteOne();
     await Like.deleteMany({ dreamId: req.params.id });
     await Comment.deleteMany({ dreamId: req.params.id });
-
+    await Notification.deleteMany({ dreamId: req.params.id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Fehler beim Löschen' });
