@@ -8,36 +8,28 @@ const NodeCache = require('node-cache');
 require('dotenv').config();
 
 const app = express();
-const cache = new NodeCache({ stdTTL: 30 }); // Cache für 30 Sekunden
+const cache = new NodeCache({ stdTTL: 30 });
 
-// CORS – erlaubt lokale Entwicklung und Produktions-Frontend
-const allowedOrigins = [
-  'http://localhost:5173',
-  'https://dreamweaver-omega.vercel.app'
-];
-
+// Einfache CORS-Konfiguration (ohne Funktion)
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Nicht erlaubt von CORS'));
-    }
-  },
+  origin: ['http://localhost:5173', 'https://dreamweaver-omega.vercel.app'],
   credentials: true,
 }));
+
+// Explizite OPTIONS-Behandlung für alle Routen (falls nötig)
+app.options('*', cors());
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// ========== HILFSFUNKTION: THUMBNAIL (Qualität auf 60% reduziert) ==========
+// ========== HILFSFUNKTION: THUMBNAIL ==========
 const generateThumbnail = async (base64Image) => {
   try {
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
     const thumbnailBuffer = await sharp(buffer)
       .resize(200, 200, { fit: 'cover', position: 'center' })
-      .jpeg({ quality: 60 }) // von 80 auf 60 gesenkt
+      .jpeg({ quality: 60 })
       .toBuffer();
     return `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
   } catch (err) {
@@ -228,7 +220,6 @@ app.get('/api/community/dreams', async (req, res) => {
     const search = req.query.search || '';
     const cacheKey = `community_${page}_${limit}_${search}`;
 
-    // Prüfen, ob Daten im Cache sind
     const cachedData = cache.get(cacheKey);
     if (cachedData) {
       return res.json(cachedData);
@@ -243,7 +234,6 @@ app.get('/api/community/dreams', async (req, res) => {
       .limit(limit)
       .select('title colors imageDataThumb likeCount commentCount userId createdAt');
 
-    // In Cache speichern
     cache.set(cacheKey, dreams);
     res.json(dreams);
   } catch (err) {
