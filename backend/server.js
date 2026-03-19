@@ -10,14 +10,28 @@ require('dotenv').config();
 const app = express();
 const cache = new NodeCache({ stdTTL: 30 });
 
-// Einfache CORS-Konfiguration (ohne Funktion)
-app.use(cors({
-  origin: ['http://localhost:5173', 'https://dreamweaver-omega.vercel.app'],
-  credentials: true,
-}));
+// Manuelle CORS-Konfiguration (erlaubt alle Origins)
+app.use((req, res, next) => {
+  const allowedOrigins = ['http://localhost:5173', 'https://dreamweaver-omega.vercel.app'];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    // Fallback für Entwicklung – erlaubt alle (optional)
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
-// Explizite OPTIONS-Behandlung für alle Routen (falls nötig)
-app.options('*', cors());
+// Alternativ kannst du auch die einfache cors-Middleware mit `origin: true` verwenden:
+// app.use(cors({ origin: true, credentials: true }));
+// app.options('*', cors({ origin: true, credentials: true }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
