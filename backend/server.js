@@ -12,7 +12,7 @@ const app = express();
 // CORS – erlaubt sowohl lokale Entwicklung als auch Produktions-Frontend
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://dreamweaver-omega.vercel.app' // deine Vercel-Frontend-URL
+  'https://dream-weaver-omega.vercel.app' // deine Vercel-Frontend-URL
 ];
 
 app.use(cors({
