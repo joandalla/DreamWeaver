@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 import Button from './Button';
+import logo from '../assets/DreamWeaver.svg'; // <-- Logo importieren
 
 export default function Header() {
   const { user, logout } = useAuth();
@@ -22,9 +23,13 @@ export default function Header() {
   return (
     <header className="bg-indigo-800 text-white shadow-md sticky top-0 z-50">
       <nav className="container mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Logo */}
-        <Link to="/" className="text-2xl font-bold tracking-tight hover:text-indigo-200 transition whitespace-nowrap">
-          DreamWeaver
+        {/* Logo + Home-Link */}
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition">
+          <img src={logo} alt="DreamWeaver Logo" className="h-8 w-auto" />
+          {/* Optional: Text nur anzeigen, falls Logo kein Wortmarke ist */}
+          <span className="text-2xl font-bold tracking-tight hover:text-indigo-200 transition whitespace-nowrap">
+            DreamWeaver
+          </span>
         </Link>
 
         {/* Desktop Navigation (zentriert) */}
