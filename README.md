@@ -1,12 +1,37 @@
-# React + Vite
+# DreamWeaver – Generative Kunst im Stil von Jackson Pollock
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+https://dreamweaver-omega.vercel.app
+https://dreamweaver-backend-qh92.onrender.com/api/health
 
-Currently, two official plugins are available:
+**DreamWeaver** ist eine interaktive Web‑App, mit der du eigene Kunstwerke im abstrakten Stil von Jackson Pollock erschaffen kannst. Die Generierung basiert auf physikalischen Simulationen (nicht‑newtonsche Fluide, Coiling‑Instabilität, vier Schichten) und wird durch wissenschaftliche Forschung inspiriert. Teile deine Bilder in der Community, interagiere mit anderen Nutzern und entdecke einzigartige, generative Kunst.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## Expanding the ESLint configuration
+- **Wissenschaftlich fundierte Kunstgenerierung** – 15 Parameter steuern nicht‑newtonsche Viskosität, Coiling, fraktale Details und Schichtaufbau.
+- **Community‑Galerie** – Entdecke die Werke anderer, suche nach Titeln, liken und kommentieren.
+- **Benutzerprofile** – Eigenes Profil mit Aktivitätsdiagramm, Tabs für Bilder, Likes und Kommentare.
+- **Admin‑Panel** – Moderation aller Bilder (für Administratoren).
+- **Dark Mode** – Volle Unterstützung für hellen und dunklen Modus.
+- **Responsive Design** – Optimiert für Desktop, Tablet und Mobile.
+- **Deployment** – Live auf Vercel (Frontend) und Render (Backend).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Wissenschaftlicher Hintergrund
+
+Die Kunstgenerierung basiert auf aktueller Forschung zu Pollocks Technik:
+- **Nicht‑newtonsche Fluide** – Scherverdünnung (shear‑thinning) wie echte Acrylfarbe.
+- **Coiling‑Instabilität** – Schlaufen und Wirbel, die durch die Fallhöhe und Viskosität entstehen.
+- **Vier‑Schichten‑Modell** – Hintergrund, unregelmäßige Formen, Dripping‑Linien, Spritzer.
+- **Fraktale / Turbulenz** – Mehrskalige Strukturen für organische Tiefe.
+
+## Technologie‑Stack
+
+| Bereich | Technologien |
+|---------|--------------|
+| **Frontend** | React 19, Vite, Tailwind CSS, React Router, Recharts, Axios |
+| **Backend** | Node.js, Express, MongoDB Atlas, JWT, bcrypt, Sharp |
+| **Hosting** | Vercel (Frontend), Render (Backend) |
+
+
+👥 Entwickelt von Joan Dalla als Abschlussprojekt.
+
+📄 Lizenz Dieses Projekt ist unter der MIT‑Lizenz veröffentlicht.
