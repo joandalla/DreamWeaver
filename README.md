@@ -1,6 +1,6 @@
 # DreamWeaver – Generative Kunst im Stil von Jackson Pollock
 
-https://dreamweaver-omega.vercel.app
+https://dream-weaver-omega.vercel.app
 https://dreamweaver-backend-qh92.onrender.com/api/health
 
 **DreamWeaver** ist eine interaktive Web‑App, mit der du eigene Kunstwerke im abstrakten Stil von Jackson Pollock erschaffen kannst. Die Generierung basiert auf physikalischen Simulationen (nicht‑newtonsche Fluide, Coiling‑Instabilität, vier Schichten) und wird durch wissenschaftliche Forschung inspiriert. Teile deine Bilder in der Community, interagiere mit anderen Nutzern und entdecke einzigartige, generative Kunst.
