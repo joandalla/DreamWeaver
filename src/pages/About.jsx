@@ -34,7 +34,7 @@ export default function About() {
         {/* Wissenschaftliche Grundlagen */}
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 mb-8">
           <h2 className="text-2xl font-semibold mb-4 dark:text-white">
-            🧠 Wissenschaftliche Grundlagen
+            Wissenschaftliche Grundlagen
           </h2>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
