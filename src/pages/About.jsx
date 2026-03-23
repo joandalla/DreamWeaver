@@ -6,7 +6,7 @@ export default function About() {
     <div className="relative overflow-hidden">
       {/* Hintergrundbild (dezent) */}
       <div
-        className="absolute inset-0 bg-cover bg-center opacity-10 dark:opacity-20"
+        className="absolute inset-0 bg-cover bg-center opacity-50 dark:opacity-20"
         style={{ backgroundImage: "url('/images/pollock-bg.jpg')" }}
       />
       
