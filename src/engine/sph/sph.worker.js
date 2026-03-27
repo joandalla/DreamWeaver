@@ -1,48 +1,38 @@
 import { SPHSolver } from './solver.js';
 
 let solver = null;
-let intervalId = null;
+let animationId = null;
+let width = 1024;
+let height = 768;
 
 self.onmessage = function(e) {
   const { type, data } = e.data;
-
+  
   if (type === 'init') {
-    try {
-      solver = new SPHSolver(data.params);
-      self.postMessage({ type: 'initDone' });
-    } catch (error) {
-      self.postMessage({ type: 'error', error: `Init-Fehler: ${error.message}` });
-    }
+    solver = new SPHSolver(data.params);
+    width = data.width || 1024;
+    height = data.height || 768;
   }
-
-  if (type === 'addParticle' && solver) {
+  
+  if (type === 'addParticle') {
     solver.addParticle(data.pos, data.vel, data.color);
   }
-
-  if (type === 'start' && solver) {
+  
+  if (type === 'start') {
     const dt = data.dt || 0.016;
-    if (intervalId) clearInterval(intervalId);
-    
-    intervalId = setInterval(() => {
-      try {
-        solver.update(dt);
-        const particlesCopy = solver.particles.map(p => ({
-          pos: [p.pos[0], p.pos[1]],
-          vel: [p.vel[0], p.vel[1]],
-          color: p.color,
-          density: p.density
-        }));
-        self.postMessage({ type: 'update', data: particlesCopy });
-      } catch (error) {
-        self.postMessage({ type: 'error', error: `Update-Fehler: ${error.message}` });
-      }
-    }, dt * 1000);
+    function step() {
+      if (!solver) return;
+      solver.update(dt, width, height);
+      self.postMessage({ type: 'update', particles: solver.particles });
+      animationId = setTimeout(step, dt * 1000);
+    }
+    step();
   }
-
+  
   if (type === 'stop') {
-    if (intervalId) {
-      clearInterval(intervalId);
-      intervalId = null;
+    if (animationId) {
+      clearTimeout(animationId);
+      animationId = null;
     }
   }
 };

@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-export function useSPH(params) {
+export function useSPH(params, width = 1024, height = 768) {
   const workerRef = useRef(null);
   const [particles, setParticles] = useState([]);
   const [error, setError] = useState(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Worker initialisieren
     try {
       workerRef.current = new Worker(
         new URL('../engine/sph/sph.worker.js', import.meta.url),
@@ -16,7 +15,7 @@ export function useSPH(params) {
 
       workerRef.current.onmessage = (e) => {
         if (e.data.type === 'update') {
-          setParticles(e.data.data);
+          setParticles(e.data.particles);
         } else if (e.data.type === 'initDone') {
           setIsReady(true);
         } else if (e.data.type === 'error') {
@@ -28,7 +27,10 @@ export function useSPH(params) {
         setError(err.message);
       };
 
-      workerRef.current.postMessage({ type: 'init', data: { params } });
+      workerRef.current.postMessage({
+        type: 'init',
+        data: { params, width, height }
+      });
 
     } catch (err) {
       setError(err.message);
@@ -39,7 +41,7 @@ export function useSPH(params) {
         workerRef.current.terminate();
       }
     };
-  }, []); // Nur einmal beim Mounten
+  }, []);
 
   const addParticle = useCallback((pos, vel, color) => {
     if (workerRef.current && isReady) {
