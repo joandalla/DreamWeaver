@@ -19,7 +19,7 @@ export default function CommunityGallery() {
   const loaderRef = useRef(null);
   const abortControllerRef = useRef(null);
 
-  // Debounce: Suche wird erst 500ms nach dem letzten Tastendruck ausgeführt
+  // Debounce für Suche
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm);
@@ -27,7 +27,7 @@ export default function CommunityGallery() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Gemeinsame Funktion zum Laden der Daten
+  // Hauptfunktion zum Laden der Daten
   const fetchDreams = useCallback(async (pageNum, reset = false) => {
     // Vorherigen Request abbrechen
     if (abortControllerRef.current) {
@@ -39,7 +39,7 @@ export default function CommunityGallery() {
     try {
       if (reset) {
         setLoading(true);
-        setDreams([]); // Nur hier leeren, wenn reset
+        setDreams([]);
       } else {
         setLoadingMore(true);
       }
@@ -57,7 +57,7 @@ export default function CommunityGallery() {
 
       if (reset) {
         setDreams(newDreams);
-        setPage(1); // sicherstellen
+        setPage(1);
       } else {
         setDreams(prev => [...prev, ...newDreams]);
         setPage(pageNum);
@@ -65,7 +65,7 @@ export default function CommunityGallery() {
 
       setHasMore(newDreams.length === PAGE_SIZE);
     } catch (err) {
-      if (axios.isCancel(err)) return; // Ignoriere abgebrochene Requests
+      if (axios.isCancel(err)) return;
       toast.error('Fehler beim Laden der Community-Bilder');
     } finally {
       setLoading(false);
@@ -74,7 +74,7 @@ export default function CommunityGallery() {
     }
   }, [debouncedSearch]);
 
-  // Bei Änderung des Suchbegriffs neu laden (reset)
+  // Bei Suchbegriff-Änderung zurücksetzen und neu laden
   useEffect(() => {
     fetchDreams(1, true);
   }, [fetchDreams]);
@@ -89,12 +89,19 @@ export default function CommunityGallery() {
           fetchDreams(page + 1, false);
         }
       },
-      { threshold: 0.5 }
+      { threshold: 0.5, rootMargin: '100px' }
     );
 
     observer.observe(loaderRef.current);
     return () => observer.disconnect();
   }, [hasMore, loadingMore, loading, page, fetchDreams]);
+
+  // Manueller "Mehr laden"-Button
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore && !loading) {
+      fetchDreams(page + 1, false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -146,11 +153,21 @@ export default function CommunityGallery() {
           </div>
         )}
 
-        {/* Lade-Indikator für mehr Bilder */}
+        {/* Lade-Indikator für unendliches Scrollen */}
         {hasMore && dreams.length > 0 && (
-          <div ref={loaderRef} className="py-8 text-center">
-            {loadingMore ? <Spinner /> : <span className="text-gray-400">Scrolle für mehr</span>}
-          </div>
+          <>
+            <div ref={loaderRef} className="py-8 text-center">
+              {loadingMore ? <Spinner /> : <span className="text-gray-400">Scrolle für mehr</span>}
+            </div>
+            {/* Manueller Button als Fallback */}
+            {!loadingMore && (
+              <div className="text-center py-4">
+                <Button variant="secondary" onClick={handleLoadMore} disabled={loadingMore}>
+                  Mehr laden
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>
