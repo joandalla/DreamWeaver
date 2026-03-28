@@ -24,7 +24,7 @@ export default function DreamDetail() {
   useEffect(() => {
     const loadDream = async () => {
       setLoading(true);
-      // Zuerst im eigenen Context suchen
+      // Zuerst im eigenen Context suchen (eigene Träume)
       const ownDream = dreams.find(d => d._id === id);
       if (ownDream) {
         setDream(ownDream);
@@ -56,8 +56,8 @@ export default function DreamDetail() {
   }, [dream]);
 
   const handleRegenerate = async () => {
-    if (!dream?.rules) return;
-    const newImageData = generateFromRules(dream.rules, 600, 400);
+    if (!dream?.params) return;
+    const newImageData = generateFromRules({ ...dream.params, colors: dream.colors }, 600, 400);
     const updatedDream = { ...dream, imageData: newImageData, imageDataThumb: newImageData };
     if (user && dream.userId === user._id) {
       await updateDream(dream._id, updatedDream);
@@ -88,14 +88,16 @@ export default function DreamDetail() {
     }
   };
 
-  // NEU: Link kopieren Funktion
-  const handleCopyLink = () => {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url).then(() => {
-      toast.success('Link in die Zwischenablage kopiert');
-    }).catch(() => {
-      toast.error('Fehler beim Kopieren');
-    });
+  const handleDownload = () => {
+    if (!dream) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataURL = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = `dreamweaver-${Date.now()}.png`;
+    link.href = dataURL;
+    link.click();
+    toast.success('Bild heruntergeladen');
   };
 
   if (loading) return <Spinner />;
@@ -146,9 +148,9 @@ export default function DreamDetail() {
               </Button>
             </>
           )}
-          {/* NEU: Teilen-Button für alle sichtbar */}
-          <Button variant="secondary" onClick={handleCopyLink}>
-            🔗 Link kopieren
+          {/* Download-Button für alle sichtbar */}
+          <Button variant="secondary" onClick={handleDownload}>
+            💾 Bild speichern
           </Button>
         </div>
         <CommentSection dreamId={dream._id} />

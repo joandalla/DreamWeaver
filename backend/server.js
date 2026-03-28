@@ -1,9 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const helmet = require('helmet');               // Sicherheits-Header
-const rateLimit = require('express-rate-limit'); // Rate Limiting
-const compression = require('compression');     // Antwortkomprimierung
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sharp = require('sharp');
@@ -11,17 +8,16 @@ const NodeCache = require('node-cache');
 require('dotenv').config();
 
 const app = express();
-const cache = new NodeCache({ stdTTL: 30 }); // Cache für 30 Sekunden
+const cache = new NodeCache({ stdTTL: 30 }); // Cache für Community-Route
+const profileCache = new NodeCache({ stdTTL: 60 }); // Cache für Profile
 
-// ========== 1. SICHERHEIT & PERFORMANCE MIDDLEWARES ==========
-
-// Helmet – setzt sicherheitsrelevante HTTP-Header
+// Sicherheits- und Performance-Middleware (optional)
+const helmet = require('helmet');
+const compression = require('compression');
 app.use(helmet());
-
-// Compression – komprimiert Antworten (gzip / Brotli)
 app.use(compression());
 
-// CORS – erlaubt nur die angegebenen Origins
+// CORS – erlaubt lokale Entwicklung und Produktions-Frontend
 const allowedOrigins = [
   'http://localhost:5173',
   'https://dreamweaver-omega.vercel.app'
@@ -37,44 +33,17 @@ app.use(cors({
   credentials: true,
 }));
 
-// JSON & URL-encoded Parser (mit erhöhtem Limit für Base64-Bilder)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// ========== 2. RATE LIMITING (Schutz vor Brute-Force & Missbrauch) ==========
-
-// Allgemeiner Limiter für alle Routen (optional, als Sicherheitsnetz)
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 Minuten
-  max: 500,                 // maximal 500 Anfragen pro IP in 15 Minuten
-  message: { error: 'Zu viele Anfragen, bitte später erneut versuchen.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Strengerer Limiter für Authentifizierungs-Endpunkte (Login, Registrierung)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 Minuten
-  max: 10,                  // nur 10 Versuche pro IP in 15 Minuten
-  message: { error: 'Zu viele Anmeldeversuche, bitte später erneut versuchen.' },
-  skipSuccessfulRequests: true, // erfolgreiche Logins zählen nicht
-});
-
-// Optional: Limiter für öffentliche API (Community, Profile) – etwas lockerer
-const publicLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  message: { error: 'Zu viele Anfragen, bitte später erneut versuchen.' },
-});
-
-// ========== 3. HILFSFUNKTION: THUMBNAIL ==========
+// ========== HILFSFUNKTION: THUMBNAIL (kleiner & stärker komprimiert) ==========
 const generateThumbnail = async (base64Image) => {
   try {
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
     const thumbnailBuffer = await sharp(buffer)
-      .resize(200, 200, { fit: 'cover', position: 'center' })
-      .jpeg({ quality: 60 })
+      .resize(150, 150, { fit: 'cover', position: 'center' }) // 150x150 statt 200x200
+      .jpeg({ quality: 50 }) // Qualität von 60 auf 50 gesenkt
       .toBuffer();
     return `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
   } catch (err) {
@@ -83,7 +52,7 @@ const generateThumbnail = async (base64Image) => {
   }
 };
 
-// ========== 4. SCHEMAS (unverändert) ==========
+// ========== SCHEMAS ==========
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
@@ -137,7 +106,7 @@ const Like = mongoose.model('Like', likeSchema);
 const Comment = mongoose.model('Comment', commentSchema);
 const Notification = mongoose.model('Notification', notificationSchema);
 
-// ========== 5. AUTH MIDDLEWARE & HELPER ==========
+// ========== AUTH MIDDLEWARE ==========
 const authenticate = async (req, res, next) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Nicht autorisiert' });
@@ -166,8 +135,8 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
-// ========== 6. AUTH ROUTES (mit Rate Limiting) ==========
-app.post('/api/register', authLimiter, async (req, res) => {
+// ========== AUTH ROUTES ==========
+app.post('/api/register', async (req, res) => {
   try {
     const { email, password } = req.body;
     const hashed = await bcrypt.hash(password, 10);
@@ -180,7 +149,7 @@ app.post('/api/register', authLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/login', authLimiter, async (req, res) => {
+app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
@@ -196,7 +165,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
   }
 });
 
-// ========== 7. DREAM ROUTES (privat) ==========
+// ========== DREAM ROUTES (privat) ==========
 app.get('/api/dreams', authenticate, async (req, res) => {
   try {
     const dreams = await Dream.find({ userId: req.userId }).sort({ createdAt: -1 });
@@ -257,8 +226,8 @@ app.delete('/api/dreams/:id', authenticate, async (req, res) => {
   }
 });
 
-// ========== 8. ÖFFENTLICHE ROUTEN (mit Rate Limiting) ==========
-app.get('/api/community/dreams', publicLimiter, async (req, res) => {
+// ========== ÖFFENTLICHE ROUTEN ==========
+app.get('/api/community/dreams', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
@@ -298,7 +267,7 @@ app.get('/api/dreams/public/:id', async (req, res) => {
   }
 });
 
-// ========== 9. LIKE ROUTES ==========
+// ========== LIKE ROUTES ==========
 app.post('/api/likes/toggle', authenticate, async (req, res) => {
   try {
     const { dreamId } = req.body;
@@ -358,7 +327,7 @@ app.get('/api/likes/count/:dreamId', async (req, res) => {
   }
 });
 
-// ========== 10. COMMENT ROUTES ==========
+// ========== COMMENT ROUTES ==========
 app.post('/api/comments', authenticate, async (req, res) => {
   try {
     const { dreamId, text } = req.body;
@@ -420,7 +389,7 @@ app.delete('/api/comments/:id', authenticate, async (req, res) => {
   }
 });
 
-// ========== 11. NOTIFICATION ROUTES ==========
+// ========== NOTIFICATION ROUTES ==========
 app.get('/api/notifications', authenticate, async (req, res) => {
   try {
     const notifications = await Notification.find({ userId: req.userId })
@@ -454,20 +423,29 @@ app.post('/api/notifications/read-all', authenticate, async (req, res) => {
   }
 });
 
-// ========== 12. PROFIL ROUTES ==========
+// ========== PROFIL ROUTE (optimiert) ==========
 app.get('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     if (!userId || userId === 'undefined') return res.status(400).json({ error: 'Ungültige User-ID' });
 
+    // Cache prüfen
+    const cacheKey = `profile_${userId}`;
+    const cached = profileCache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const user = await User.findById(userId).select('email role');
     if (!user) return res.status(404).json({ error: 'User nicht gefunden' });
 
+    // Nur Thumbnails, kein imageData
     const dreams = await Dream.find({ userId })
       .sort({ createdAt: -1 })
-      .limit(50)
-      .select('title imageData imageDataThumb likeCount commentCount createdAt');
+      .limit(20)
+      .select('title imageDataThumb likeCount commentCount createdAt');
 
+    // Tägliche Statistiken (letzte 7 Tage)
     const dailyStats = [];
     const today = new Date();
     for (let i = 6; i >= 0; i--) {
@@ -487,17 +465,21 @@ app.get('/api/profile/:userId', async (req, res) => {
 
     const commentsCount = await Comment.countDocuments({ userId });
 
-    res.json({
+    const result = {
       user: { email: user.email, _id: user._id, role: user.role },
       dreams,
       stats: { dreamsCount: dreams.length, likesReceived, commentsCount, daily: dailyStats },
-    });
+    };
+
+    profileCache.set(cacheKey, result);
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Fehler beim Laden des Profils' });
   }
 });
 
+// ========== WEITERE PROFIL-ROUTEN (Likes, Kommentare) ==========
 app.get('/api/profile/:userId/likes', authenticate, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -526,7 +508,7 @@ app.get('/api/profile/:userId/comments', authenticate, async (req, res) => {
   }
 });
 
-// ========== 13. ADMIN ROUTEN ==========
+// ========== ADMIN ROUTEN ==========
 app.get('/api/admin/dreams', authenticate, isAdmin, async (req, res) => {
   try {
     const dreams = await Dream.find()
@@ -553,12 +535,12 @@ app.delete('/api/admin/dreams/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-// ========== 14. HEALTH CHECK (kein Rate Limit) ==========
+// ========== HEALTH CHECK ==========
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// ========== 15. SERVER START ==========
+// ========== SERVER START ==========
 const PORT = process.env.PORT || 5000;
 
 mongoose.connect(process.env.MONGODB_URI)

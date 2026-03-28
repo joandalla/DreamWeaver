@@ -1,0 +1,30 @@
+app.post('/api/dreams', authenticate, async (req, res) => {
+  try {
+    const { title, colors, params, imageData } = req.body;
+    // Speichere zuerst ohne Thumbnail
+    const dream = new Dream({
+      userId: req.userId,
+      title,
+      colors,
+      params,
+      imageData,
+      imageDataThumb: imageData, // vorläufig Original
+    });
+    await dream.save();
+    
+    // Thumbnail im Hintergrund generieren und später aktualisieren
+    setImmediate(async () => {
+      try {
+        const thumb = await generateThumbnail(imageData);
+        await Dream.findByIdAndUpdate(dream._id, { imageDataThumb: thumb });
+      } catch (err) {
+        console.error('Thumbnail-Generierung fehlgeschlagen:', err);
+      }
+    });
+    
+    res.json(dream);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Speichern' });
+  }
+});
