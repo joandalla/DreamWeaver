@@ -412,7 +412,7 @@ export default function DreamWeaver() {
                     type="button"
                     variant="danger"
                     onClick={() => removeColor(index)}
-                    className="!p-1 !px-3 text-sm"
+                    className="p-1! px-3! text-sm"
                   >
                     ✕
                   </Button>
